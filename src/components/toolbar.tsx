@@ -20,7 +20,7 @@ import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/reac
 import { toPng, toSvg } from "html-to-image";
 import { useStore } from "zustand";
 import { useFlowStore } from "@/store/flow-store";
-import { downloadSnapshot } from "@/lib/storage";
+import { downloadSnapshot, saveDraft, loadDraft, listDrafts, deleteDraft, type DraftMeta } from "@/lib/storage";
 import { importDiagramFile } from "@/lib/import-handler";
 import { cn } from "@/lib/utils";
 import {
@@ -77,6 +77,11 @@ export function Toolbar() {
   const [cropMode, setCropMode] = useState<{
     format: "png" | "svg";
   } | null>(null);
+  const [currentDraftName, setCurrentDraftName] = useState<string | null>(null);
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const [draftMgrOpen, setDraftMgrOpen] = useState(false);
+  const [drafts, setDrafts] = useState<DraftMeta[]>([]);
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState<string | null>(null);
 
   const canUndo = useStore(useFlowStore.temporal, (s) => s.pastStates.length > 0);
   const canRedo = useStore(
@@ -103,11 +108,18 @@ export function Toolbar() {
       } else if (k === "a") {
         e.preventDefault();
         selectAll();
+      } else if (k === "s") {
+        e.preventDefault();
+        if (currentDraftName) {
+          void saveCurrentToDraft(currentDraftName);
+        } else {
+          setSaveAsOpen(true);
+        }
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selectAll]);
+  }, [selectAll, currentDraftName]);
 
   const uploadImage = (f: File) => {
     const reader = new FileReader();
@@ -412,6 +424,44 @@ export function Toolbar() {
     }
   };
 
+  const buildSnapshot = () => ({
+    version: 1 as const,
+    nodes,
+    edges,
+    customBlocks,
+    groups,
+    turbo,
+    animateEdges,
+    animationSpeed,
+    turboColors,
+  });
+
+  const saveCurrentToDraft = async (name: string) => {
+    await saveDraft(name, buildSnapshot());
+    setCurrentDraftName(name);
+  };
+
+  const loadDraftToCanvas = async (name: string) => {
+    const snap = await loadDraft(name);
+    if (!snap) return;
+    replace({
+      nodes: snap.nodes,
+      edges: snap.edges,
+      customBlocks: snap.customBlocks ?? [],
+      groups: snap.groups ?? [],
+      ...(snap.turbo !== undefined && { turbo: snap.turbo }),
+      ...(snap.animateEdges !== undefined && { animateEdges: snap.animateEdges }),
+      ...(snap.animationSpeed !== undefined && { animationSpeed: snap.animationSpeed }),
+      ...(snap.turboColors !== undefined && { turboColors: snap.turboColors }),
+    });
+    setCurrentDraftName(name);
+  };
+
+  const openDraftManager = async () => {
+    setDrafts(await listDrafts());
+    setDraftMgrOpen(true);
+  };
+
   return (
     <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-card/40 px-2">
       <div className="flex items-center justify-start gap-0.5">
@@ -492,6 +542,35 @@ export function Toolbar() {
             </MenuItem>
           </MenuSubmenu>
           <MenuSubmenu label="Export">
+            <MenuItem
+              onSelect={async (close) => {
+                if (currentDraftName) {
+                  await saveCurrentToDraft(currentDraftName);
+                } else {
+                  setSaveAsOpen(true);
+                }
+                close();
+              }}
+            >
+              Save{currentDraftName ? ` (${currentDraftName})` : ""}
+            </MenuItem>
+            <MenuItem
+              onSelect={(close) => {
+                setSaveAsOpen(true);
+                close();
+              }}
+            >
+              Save As...
+            </MenuItem>
+            <MenuItem
+              onSelect={async (close) => {
+                await openDraftManager();
+                close();
+              }}
+            >
+              Manage Drafts...
+            </MenuItem>
+            <MenuSeparator />
             <MenuItem
               onSelect={(close) => {
                 save();
@@ -783,6 +862,137 @@ export function Toolbar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Save As Dialog */}
+      <Dialog open={saveAsOpen} onOpenChange={setSaveAsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save As</DialogTitle>
+            <DialogDescription>Name your draft.</DialogDescription>
+          </DialogHeader>
+          <SaveAsForm
+            onSave={async (name) => {
+              await saveCurrentToDraft(name);
+              setSaveAsOpen(false);
+            }}
+            onClose={() => setSaveAsOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Drafts Dialog */}
+      <Dialog open={draftMgrOpen} onOpenChange={setDraftMgrOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage Drafts</DialogTitle>
+            <DialogDescription>
+              Load, overwrite, export, or delete saved drafts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[360px] space-y-2 overflow-y-auto py-2">
+            {drafts.length === 0 && (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No drafts yet.
+              </p>
+            )}
+            {drafts.map((d) => (
+              <div
+                key={d.name}
+                className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{d.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.nodeCount} nodes · {d.edgeCount} edges ·{" "}
+                    {new Date(d.updatedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      await loadDraftToCanvas(d.name);
+                      setDraftMgrOpen(false);
+                    }}
+                  >
+                    Load
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      await saveCurrentToDraft(d.name);
+                      setDrafts(await listDrafts());
+                    }}
+                  >
+                    Overwrite
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void loadDraft(d.name).then((snap) => {
+                        if (snap) downloadSnapshot(snap, d.name);
+                      });
+                    }}
+                  >
+                    Export
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => setConfirmDeleteDraft(d.name)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDraftMgrOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Delete Draft */}
+      <Dialog
+        open={!!confirmDeleteDraft}
+        onOpenChange={(o) => { if (!o) setConfirmDeleteDraft(null); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete draft?</DialogTitle>
+            <DialogDescription>
+              This removes the saved draft permanently.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteDraft(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (confirmDeleteDraft) {
+                  await deleteDraft(confirmDeleteDraft);
+                  if (currentDraftName === confirmDeleteDraft) {
+                    setCurrentDraftName(null);
+                  }
+                  setDrafts(await listDrafts());
+                  setConfirmDeleteDraft(null);
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {cropMode && (
         <CropOverlay
           onComplete={onCropComplete}
@@ -793,6 +1003,58 @@ export function Toolbar() {
       <AiConfigDialog open={aiConfigOpen} onOpenChange={setAiConfigOpen} />
       <AiBeautifyDialog open={aiBeautifyOpen} onOpenChange={setAiBeautifyOpen} />
     </header>
+  );
+}
+
+function SaveAsForm({
+  onSave,
+  onClose,
+}: {
+  onSave: (name: string) => void;
+  onClose: () => void;
+}) {
+  const suggested = `netviz-${new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[:T]/g, "-")}`;
+  const [name, setName] = useState(suggested);
+  const [saving, setSaving] = useState(false);
+  const canSave = name.trim().length > 0;
+
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    try {
+      await onSave(name.trim());
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-3 py-2">
+      <div className="grid gap-1.5">
+        <Label htmlFor="draft-name">Draft name</Label>
+        <Input
+          id="draft-name"
+          autoFocus
+          placeholder="my-draft"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSave();
+          }}
+        />
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={!canSave || saving}>
+          {saving ? "Saving..." : "Save"}
+        </Button>
+      </DialogFooter>
+    </div>
   );
 }
 
