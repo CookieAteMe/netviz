@@ -168,13 +168,15 @@ export function AiBeautifyDialog({
       try {
         const result = await callAiBeautify(config, n, e);
         const diffs = computeDiff(n, e, result);
-        addLlmHistory({
+        const record: LlmCallRecord = {
           id: `llm${Date.now().toString(36)}`,
           timestamp: Date.now(),
           endpoint: config.endpoint,
           model: config.model,
           apiKeyPrefix: maskApiKey(config.apiKey),
-        });
+        };
+        addLlmHistory(record);
+        setLlmHistory((prev) => [record, ...prev]);
         setStatus({ type: "preview", diffs, summary: result.summary });
         const applied = applyResult(n, e, result);
         setBeautifyResult(applied);

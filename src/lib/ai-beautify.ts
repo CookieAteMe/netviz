@@ -53,6 +53,11 @@ export function maskApiKey(key: string): string {
 
 export function loadLlmHistory(): LlmCallRecord[] {
   try {
+    // Migrate from old key
+    const oldRaw = localStorage.getItem("netviz-beautify-history");
+    if (oldRaw) {
+      localStorage.removeItem("netviz-beautify-history");
+    }
     const raw = localStorage.getItem(LLM_HISTORY_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as LlmCallRecord[];
