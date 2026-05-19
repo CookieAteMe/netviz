@@ -21,9 +21,8 @@ function InfraNodeComponent({ data, selected }: NodeProps<InfraNode>) {
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const block = resolveBlock(data.blockId, customBlocks) ?? CORE_BLOCKS[0];
   const iconName = data.iconName ?? block.iconName;
-  const accentKey = data.accent ?? block.accent;
+  const accent = ACCENT_CLASSES[data.accent ?? block.accent] ?? ACCENT_CLASSES.slate;
   const Icon = resolveIcon(iconName);
-  const accent = ACCENT_CLASSES[accentKey];
   const variant = data.variant ?? block.variant ?? "row";
   const isCard = variant === "card";
   const iconPosition = data.iconPosition ?? (isCard ? "top" : "left");

@@ -17,8 +17,7 @@ const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
 ];
 
 function StepNodeComponent({ data, selected }: NodeProps<StepNode>) {
-  const accentKey = data.accent ?? "indigo";
-  const accent = ACCENT_CLASSES[accentKey];
+  const accent = (data.accent && ACCENT_CLASSES[data.accent]) ?? ACCENT_CLASSES.indigo;
 
   const style: React.CSSProperties = {};
   if (data.bgColor) style.backgroundColor = data.bgColor;

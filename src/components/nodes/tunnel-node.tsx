@@ -17,8 +17,7 @@ const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
 ];
 
 function TunnelNodeComponent({ data, selected }: NodeProps<TunnelNode>) {
-  const accentKey = data.accent ?? "sky";
-  const accent = ACCENT_CLASSES[accentKey];
+  const accent = (data.accent && ACCENT_CLASSES[data.accent]) ?? ACCENT_CLASSES.sky;
 
   return (
     <div
