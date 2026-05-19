@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, Loader2, Check, Eye, EyeOff, ChevronLeft, ChevronRight, History } from "lucide-react";
+import { Sparkles, Loader2, Check, Eye, EyeOff, RotateCcw, ChevronLeft, ChevronRight, History } from "lucide-react";
 import type { AppNode, LabeledEdge } from "@/store/flow-store";
 import { useFlowStore } from "@/store/flow-store";
 import {
@@ -145,6 +145,7 @@ export function AiBeautifyDialog({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(0);
   const [showConfig, setShowConfig] = useState(false);
+  const [previewActive, setPreviewActive] = useState(false);
   const HISTORY_PAGE_SIZE = 5;
 
   // When dialog opens, snapshot current state but don't call API
@@ -154,6 +155,7 @@ export function AiBeautifyDialog({
       setCurrentEdges(edges);
       setBeautifyResult(null);
       setShowConfig(false);
+      setPreviewActive(false);
 
       const config = loadAiConfig();
       const saved = loadLlmHistory();
@@ -219,17 +221,35 @@ export function AiBeautifyDialog({
     }
   };
 
+  const handleTogglePreview = useCallback(() => {
+    if (!beautifyResult) return;
+    if (previewActive) {
+      replace({ nodes: currentNodes, edges: currentEdges });
+      setPreviewActive(false);
+    } else {
+      replace({ nodes: beautifyResult.nodes, edges: beautifyResult.edges });
+      setPreviewActive(true);
+    }
+  }, [beautifyResult, previewActive, currentNodes, currentEdges, replace]);
+
   const handleApply = () => {
     if (!beautifyResult) return;
-    replace({
-      nodes: beautifyResult.nodes,
-      edges: beautifyResult.edges,
-    });
+    if (!previewActive) {
+      replace({
+        nodes: beautifyResult.nodes,
+        edges: beautifyResult.edges,
+      });
+    }
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => {
+      if (!v && previewActive && beautifyResult) {
+        replace({ nodes: currentNodes, edges: currentEdges });
+      }
+      onOpenChange(v);
+    }}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -397,6 +417,19 @@ export function AiBeautifyDialog({
               )}
 
               <div className="flex items-center gap-2">
+                <Button
+                  variant={previewActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleTogglePreview}
+                  className="gap-1.5"
+                >
+                  {previewActive ? (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                  {previewActive ? "Revert" : "Preview"}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
