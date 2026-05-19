@@ -23,8 +23,7 @@ const BORDER_STYLE_CLASS = {
 } as const;
 
 function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
-  const accentKey = data.accent ?? "slate";
-  const accent = ACCENT_CLASSES[accentKey];
+  const accent = (data.accent && ACCENT_CLASSES[data.accent]) ?? ACCENT_CLASSES.slate;
   const isCircle = data.shape === "circle";
   const borderStyle = data.borderStyle ?? "dashed";
 

@@ -14,7 +14,7 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from "@xyflow/react";
-import { CORE_BLOCKS, type Accent, type BlockDef } from "@/blocks/registry";
+import { CORE_BLOCKS, ACCENT_CLASSES, type Accent, type BlockDef } from "@/blocks/registry";
 import type { IconName } from "@/blocks/icons";
 
 export type InfraVariant = "row" | "card";
@@ -319,8 +319,32 @@ function descendantGroupIds(groups: Group[], rootId: string): Set<string> {
   return result;
 }
 
+const VALID_ACCENTS = new Set(Object.keys(ACCENT_CLASSES));
+
+function sanitizeNodes(nodes: AppNode[]): AppNode[] {
+  return nodes.map((n) => {
+    const d = n.data as Record<string, unknown>;
+    if (d.accent && typeof d.accent === "string" && !VALID_ACCENTS.has(d.accent)) {
+      return { ...n, data: { ...d, accent: undefined } } as AppNode;
+    }
+    return n;
+  });
+}
+
 const idbStorage: StateStorage = {
-  getItem: async (name) => ((await idbGet(name)) as string | undefined) ?? null,
+  getItem: async (name) => {
+    const raw = ((await idbGet(name)) as string | undefined) ?? null;
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.state?.nodes) {
+        parsed.state.nodes = sanitizeNodes(parsed.state.nodes);
+      }
+      return JSON.stringify(parsed);
+    } catch {
+      return raw;
+    }
+  },
   setItem: async (name, value) => {
     await idbSet(name, value);
   },

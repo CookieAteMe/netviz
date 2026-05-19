@@ -12,8 +12,7 @@ const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
 ];
 
 function TextNodeComponent({ data }: NodeProps<TextNode>) {
-  const accentKey = data.accent ?? "slate";
-  const accent = ACCENT_CLASSES[accentKey];
+  const accent = (data.accent && ACCENT_CLASSES[data.accent]) ?? ACCENT_CLASSES.slate;
 
   const style: React.CSSProperties = {};
   if (data.bgColor) style.backgroundColor = data.bgColor;
