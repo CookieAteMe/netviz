@@ -12,6 +12,7 @@ import {
   Check,
   ChevronRight,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -33,6 +34,7 @@ import {
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { AiConfigDialog, AiBeautifyDialog } from "@/components/ai-beautify-dialog";
 
 import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string }[] = [
@@ -65,6 +67,8 @@ export function Toolbar() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [aiConfigOpen, setAiConfigOpen] = useState(false);
+  const [aiBeautifyOpen, setAiBeautifyOpen] = useState(false);
   const [exportDialog, setExportDialog] = useState<{
     format: "png" | "svg";
     name: string;
@@ -572,7 +576,7 @@ export function Toolbar() {
             Upload image
           </MenuItem>
           <MenuSeparator />
-          <PreferencesSubmenu />
+          <PreferencesSubmenu onOpenAiConfig={() => setAiConfigOpen(true)} />
           <MenuSeparator />
           <MenuItem
             danger
@@ -593,6 +597,15 @@ export function Toolbar() {
             Reset workspace
           </MenuItem>
         </Menu>
+        <button
+          type="button"
+          onClick={() => setAiBeautifyOpen(true)}
+          aria-label="AI Beautify"
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-950"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span>AI Beautify</span>
+        </button>
       </div>
       <div className="pointer-events-none fixed left-1/2 top-0 z-40 flex h-12 -translate-x-1/2 items-center">
         <div className="pointer-events-auto flex items-center rounded-md border border-border bg-card p-0.5">
@@ -777,6 +790,8 @@ export function Toolbar() {
           onCancel={onCropCancel}
         />
       )}
+      <AiConfigDialog open={aiConfigOpen} onOpenChange={setAiConfigOpen} />
+      <AiBeautifyDialog open={aiBeautifyOpen} onOpenChange={setAiBeautifyOpen} />
     </header>
   );
 }
@@ -889,7 +904,7 @@ function CropOverlay({
   );
 }
 
-function PreferencesSubmenu() {
+function PreferencesSubmenu({ onOpenAiConfig }: { onOpenAiConfig: () => void }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -944,6 +959,10 @@ function PreferencesSubmenu() {
       </MenuItem>
       <MenuItem active={showSmartGuides} onSelect={() => toggleSmartGuides()}>
         Smart guides
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem onSelect={(close) => { onOpenAiConfig(); close(); }}>
+        AI Config...
       </MenuItem>
     </MenuSubmenu>
   );
