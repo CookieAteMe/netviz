@@ -31,6 +31,43 @@ export type BeautifyDiffEntry = {
 };
 
 const AI_CONFIG_KEY = "netviz-ai-config";
+const HISTORY_KEY = "netviz-beautify-history";
+const MAX_HISTORY = 50;
+
+// ---------------------------------------------------------------------------
+// History types & persistence
+// ---------------------------------------------------------------------------
+
+export type BeautifyHistoryEntry = {
+  id: string;
+  timestamp: number;
+  summary?: string;
+  nodeCount: number;
+  edgeCount: number;
+  changeCount: number;
+  diffs: BeautifyDiffEntry[];
+};
+
+export function loadBeautifyHistory(): BeautifyHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as BeautifyHistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+export function addBeautifyHistory(entry: BeautifyHistoryEntry): void {
+  const history = loadBeautifyHistory();
+  history.unshift(entry);
+  if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+export function clearBeautifyHistory(): void {
+  localStorage.removeItem(HISTORY_KEY);
+}
 
 // ---------------------------------------------------------------------------
 // Config persistence

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, Loader2, Check, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Loader2, Check, Eye, EyeOff, ChevronLeft, ChevronRight, History } from "lucide-react";
 import type { AppNode, LabeledEdge } from "@/store/flow-store";
 import { useFlowStore } from "@/store/flow-store";
 import {
@@ -8,8 +8,11 @@ import {
   applyResult,
   saveAiConfig,
   loadAiConfig,
+  addBeautifyHistory,
+  loadBeautifyHistory,
   type AiConfig,
   type BeautifyDiffEntry,
+  type BeautifyHistoryEntry,
 } from "@/lib/ai-beautify";
 import {
   Dialog,
@@ -113,6 +116,7 @@ export function AiConfigDialog({
 
 type Status =
   | { type: "config" }
+  | { type: "ready" }
   | { type: "loading" }
   | { type: "error"; message: string }
   | { type: "preview"; diffs: BeautifyDiffEntry[]; summary?: string };
@@ -128,7 +132,7 @@ export function AiBeautifyDialog({
   const edges = useFlowStore((s) => s.edges);
   const replace = useFlowStore((s) => s.replace);
 
-  const [status, setStatus] = useState<Status>({ type: "config" });
+  const [status, setStatus] = useState<Status>({ type: "ready" });
   const [showDetails, setShowDetails] = useState(true);
   const [currentNodes, setCurrentNodes] = useState(nodes);
   const [currentEdges, setCurrentEdges] = useState(edges);
@@ -136,8 +140,12 @@ export function AiBeautifyDialog({
     nodes: AppNode[];
     edges: LabeledEdge[];
   } | null>(null);
+  const [history, setHistory] = useState<BeautifyHistoryEntry[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PAGE_SIZE = 5;
 
-  // When dialog opens, snapshot current state
+  // When dialog opens, snapshot current state but don't call API
   useEffect(() => {
     if (open) {
       setCurrentNodes(nodes);
@@ -145,12 +153,12 @@ export function AiBeautifyDialog({
       setBeautifyResult(null);
 
       const config = loadAiConfig();
-      if (config) {
-        setStatus({ type: "loading" });
-        runBeautify(config, nodes, edges);
-      } else {
-        setStatus({ type: "config" });
-      }
+      const saved = loadBeautifyHistory();
+      setHistory(saved);
+      setHistoryPage(0);
+      // Auto-show history on subsequent opens if there is history
+      setHistoryOpen(saved.length > 0);
+      setStatus(config ? { type: "ready" } : { type: "config" });
     }
   }, [open]);
 
@@ -160,6 +168,17 @@ export function AiBeautifyDialog({
       try {
         const result = await callAiBeautify(config, n, e);
         const diffs = computeDiff(n, e, result);
+        const entry: BeautifyHistoryEntry = {
+          id: `h${Date.now().toString(36)}`,
+          timestamp: Date.now(),
+          summary: result.summary,
+          nodeCount: n.length,
+          edgeCount: e.length,
+          changeCount: diffs.length,
+          diffs,
+        };
+        addBeautifyHistory(entry);
+        setHistory((prev) => [entry, ...prev]);
         setStatus({ type: "preview", diffs, summary: result.summary });
         const applied = applyResult(n, e, result);
         setBeautifyResult(applied);
@@ -172,6 +191,15 @@ export function AiBeautifyDialog({
     },
     []
   );
+
+  const handleStart = () => {
+    const config = loadAiConfig();
+    if (config) {
+      runBeautify(config, currentNodes, currentEdges);
+    } else {
+      setStatus({ type: "config" });
+    }
+  };
 
   const handleRetry = () => {
     const config = loadAiConfig();
@@ -201,6 +229,7 @@ export function AiBeautifyDialog({
           </DialogTitle>
           <DialogDescription>
             {status.type === "loading" && "Optimizing diagram layout..."}
+            {status.type === "ready" && "Click start to beautify the current diagram layout."}
             {status.type === "preview" && "Review the changes below before applying."}
             {status.type === "error" && "Something went wrong."}
             {status.type === "config" && "Configure your AI provider first."}
@@ -212,6 +241,81 @@ export function AiBeautifyDialog({
             <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-sm">Calling AI API...</span>
+            </div>
+          )}
+
+          {status.type === "ready" && (
+            <div className="flex flex-col items-center gap-4 py-3">
+              <p className="text-sm text-muted-foreground">
+                {currentNodes.length} nodes, {currentEdges.length} edges will be optimized
+              </p>
+              <Button onClick={handleStart} size="default" className="gap-2">
+                <Sparkles className="h-5 w-5" />
+                Start Beautify
+              </Button>
+
+              {history.length > 0 && (
+                <div className="w-full pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen((v) => !v)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    History ({history.length})
+                    <ChevronRight
+                      className={`ml-auto h-3.5 w-3.5 transition-transform ${historyOpen ? "rotate-90" : ""}`}
+                    />
+                  </button>
+
+                  {historyOpen && (
+                    <div className="mt-2 space-y-1">
+                      {history
+                        .slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE)
+                        .map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="rounded-md border border-border px-3 py-2 text-xs"
+                          >
+                            <div className="flex items-center justify-between text-muted-foreground">
+                              <span>{new Date(entry.timestamp).toLocaleString()}</span>
+                              <span>{entry.changeCount} changes</span>
+                            </div>
+                            {entry.summary && (
+                              <p className="mt-0.5 text-foreground">{entry.summary}</p>
+                            )}
+                            <p className="mt-0.5 text-muted-foreground">
+                              {entry.nodeCount} nodes · {entry.edgeCount} edges
+                            </p>
+                          </div>
+                        ))}
+                      {history.length > HISTORY_PAGE_SIZE && (
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={historyPage === 0}
+                            onClick={() => setHistoryPage((p) => p - 1)}
+                            className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            {historyPage + 1} / {Math.ceil(history.length / HISTORY_PAGE_SIZE)}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= history.length}
+                            onClick={() => setHistoryPage((p) => p + 1)}
+                            className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -236,7 +340,7 @@ export function AiBeautifyDialog({
           )}
 
           {status.type === "config" && (
-            <AiConfigInline onDone={() => handleRetry()} />
+            <AiConfigInline onDone={() => setStatus({ type: "ready" })} />
           )}
 
           {status.type === "preview" && (
