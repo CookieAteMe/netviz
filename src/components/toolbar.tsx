@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import {
   Check,
   ChevronRight,
-  MoreVertical,
+  Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -19,7 +19,8 @@ import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/reac
 import { toPng, toSvg } from "html-to-image";
 import { useStore } from "zustand";
 import { useFlowStore } from "@/store/flow-store";
-import { downloadSnapshot, readSnapshotFromFile } from "@/lib/storage";
+import { downloadSnapshot } from "@/lib/storage";
+import { importDiagramFile } from "@/lib/import-handler";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -390,16 +391,16 @@ export function Toolbar() {
 
   const load = async (f: File) => {
     try {
-      const snap = await readSnapshotFromFile(f);
+      const snap = await importDiagramFile(f);
       replace({
         nodes: snap.nodes,
         edges: snap.edges,
         customBlocks: snap.customBlocks ?? [],
         groups: snap.groups ?? [],
-        turbo: snap.turbo ?? false,
-        animateEdges: snap.animateEdges ?? false,
-        animationSpeed: snap.animationSpeed ?? 0.8,
-        turboColors: snap.turboColors ?? undefined,
+        ...(snap.turbo !== undefined && { turbo: snap.turbo }),
+        ...(snap.animateEdges !== undefined && { animateEdges: snap.animateEdges }),
+        ...(snap.animationSpeed !== undefined && { animationSpeed: snap.animationSpeed }),
+        ...(snap.turboColors !== undefined && { turboColors: snap.turboColors }),
       });
     } catch (e) {
       console.error(e);
@@ -410,7 +411,7 @@ export function Toolbar() {
   return (
     <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-card/40 px-2">
       <div className="flex items-center justify-start gap-0.5">
-        <Menu icon={MoreVertical} label="More" align="left">
+        <Menu icon={Settings} label="Settings" align="left">
           <MenuSubmenu label="Edit">
             <MenuItem
               shortcut="⌘Z"
@@ -520,6 +521,48 @@ export function Toolbar() {
           >
             Import
           </MenuItem>
+          <MenuSubmenu label="Import format">
+            <MenuItem
+              onSelect={(close) => {
+                fileRef.current?.click();
+                close();
+              }}
+            >
+              .drawio — Draw.io / diagrams.net
+            </MenuItem>
+            <MenuItem
+              onSelect={(close) => {
+                fileRef.current?.click();
+                close();
+              }}
+            >
+              .excalidraw — Excalidraw
+            </MenuItem>
+            <MenuItem
+              onSelect={(close) => {
+                fileRef.current?.click();
+                close();
+              }}
+            >
+              .mmd — Mermaid Flowchart
+            </MenuItem>
+            <MenuItem
+              onSelect={(close) => {
+                fileRef.current?.click();
+                close();
+              }}
+            >
+              .svg — SVG (basic shapes)
+            </MenuItem>
+            <MenuItem
+              onSelect={(close) => {
+                fileRef.current?.click();
+                close();
+              }}
+            >
+              .json — NetViz snapshot
+            </MenuItem>
+          </MenuSubmenu>
           <MenuItem
             onSelect={(close) => {
               imageRef.current?.click();
@@ -579,7 +622,7 @@ export function Toolbar() {
       <input
         ref={fileRef}
         type="file"
-        accept="application/json,.json"
+        accept=".json,.drawio,.dio,.xml,.excalidraw,.svg,.svgz,.mmd,.mermaid"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -943,7 +986,6 @@ function Menu({
   useEffect(() => {
     if (!open) setActiveSubmenu(null);
   }, [open]);
-  const isIcon = !!Ic && !label;
   const close = () => setOpen(false);
   return (
     <div ref={ref} className="relative">
@@ -952,14 +994,13 @@ function Menu({
         onClick={() => setOpen((o) => !o)}
         aria-label={label}
         className={cn(
-          "rounded-md text-sm transition-colors hover:bg-accent",
-          isIcon
-            ? "flex h-8 w-8 items-center justify-center"
-            : "flex h-8 w-8 items-center justify-center",
+          "flex items-center justify-center rounded-md transition-colors hover:bg-accent",
+          Ic && !label ? "h-8 w-8" : "gap-1.5 px-2.5 py-1.5 text-sm font-medium",
           open && "bg-accent text-accent-foreground"
         )}
       >
-        {Ic ? <Ic className="h-4 w-4" /> : label}
+        {Ic && <Ic className="h-5 w-5" />}
+        {label && !Ic && <span>{label}</span>}
       </button>
       {open && (
         <div
