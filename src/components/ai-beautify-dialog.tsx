@@ -8,11 +8,12 @@ import {
   applyResult,
   saveAiConfig,
   loadAiConfig,
-  addBeautifyHistory,
-  loadBeautifyHistory,
+  addLlmHistory,
+  loadLlmHistory,
+  maskApiKey,
   type AiConfig,
   type BeautifyDiffEntry,
-  type BeautifyHistoryEntry,
+  type LlmCallRecord,
 } from "@/lib/ai-beautify";
 import {
   Dialog,
@@ -140,7 +141,7 @@ export function AiBeautifyDialog({
     nodes: AppNode[];
     edges: LabeledEdge[];
   } | null>(null);
-  const [history, setHistory] = useState<BeautifyHistoryEntry[]>([]);
+  const [llmHistory, setLlmHistory] = useState<LlmCallRecord[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(0);
   const HISTORY_PAGE_SIZE = 5;
@@ -153,10 +154,9 @@ export function AiBeautifyDialog({
       setBeautifyResult(null);
 
       const config = loadAiConfig();
-      const saved = loadBeautifyHistory();
-      setHistory(saved);
+      const saved = loadLlmHistory();
+      setLlmHistory(saved);
       setHistoryPage(0);
-      // Auto-show history on subsequent opens if there is history
       setHistoryOpen(saved.length > 0);
       setStatus(config ? { type: "ready" } : { type: "config" });
     }
@@ -168,17 +168,13 @@ export function AiBeautifyDialog({
       try {
         const result = await callAiBeautify(config, n, e);
         const diffs = computeDiff(n, e, result);
-        const entry: BeautifyHistoryEntry = {
-          id: `h${Date.now().toString(36)}`,
+        addLlmHistory({
+          id: `llm${Date.now().toString(36)}`,
           timestamp: Date.now(),
-          summary: result.summary,
-          nodeCount: n.length,
-          edgeCount: e.length,
-          changeCount: diffs.length,
-          diffs,
-        };
-        addBeautifyHistory(entry);
-        setHistory((prev) => [entry, ...prev]);
+          endpoint: config.endpoint,
+          model: config.model,
+          apiKeyPrefix: maskApiKey(config.apiKey),
+        });
         setStatus({ type: "preview", diffs, summary: result.summary });
         const applied = applyResult(n, e, result);
         setBeautifyResult(applied);
@@ -254,7 +250,7 @@ export function AiBeautifyDialog({
                 Start Beautify
               </Button>
 
-              {history.length > 0 && (
+              {llmHistory.length > 0 && (
                 <div className="w-full pt-2">
                   <button
                     type="button"
@@ -262,7 +258,7 @@ export function AiBeautifyDialog({
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
                   >
                     <History className="h-3.5 w-3.5" />
-                    History ({history.length})
+                    LLM Calls ({llmHistory.length})
                     <ChevronRight
                       className={`ml-auto h-3.5 w-3.5 transition-transform ${historyOpen ? "rotate-90" : ""}`}
                     />
@@ -270,26 +266,24 @@ export function AiBeautifyDialog({
 
                   {historyOpen && (
                     <div className="mt-2 space-y-1">
-                      {history
+                      {llmHistory
                         .slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE)
-                        .map((entry) => (
+                        .map((r) => (
                           <div
-                            key={entry.id}
+                            key={r.id}
                             className="rounded-md border border-border px-3 py-2 text-xs"
                           >
                             <div className="flex items-center justify-between text-muted-foreground">
-                              <span>{new Date(entry.timestamp).toLocaleString()}</span>
-                              <span>{entry.changeCount} changes</span>
+                              <span>{new Date(r.timestamp).toLocaleString()}</span>
+                              <span className="font-mono">{r.model}</span>
                             </div>
-                            {entry.summary && (
-                              <p className="mt-0.5 text-foreground">{entry.summary}</p>
-                            )}
-                            <p className="mt-0.5 text-muted-foreground">
-                              {entry.nodeCount} nodes · {entry.edgeCount} edges
+                            <p className="mt-0.5 truncate text-muted-foreground" title={r.endpoint}>
+                              {r.endpoint}
                             </p>
+                            <p className="font-mono text-muted-foreground">{r.apiKeyPrefix}</p>
                           </div>
                         ))}
-                      {history.length > HISTORY_PAGE_SIZE && (
+                      {llmHistory.length > HISTORY_PAGE_SIZE && (
                         <div className="flex items-center justify-center gap-2 pt-1">
                           <button
                             type="button"
@@ -300,11 +294,11 @@ export function AiBeautifyDialog({
                             <ChevronLeft className="h-3.5 w-3.5" />
                           </button>
                           <span className="text-xs text-muted-foreground">
-                            {historyPage + 1} / {Math.ceil(history.length / HISTORY_PAGE_SIZE)}
+                            {historyPage + 1} / {Math.ceil(llmHistory.length / HISTORY_PAGE_SIZE)}
                           </span>
                           <button
                             type="button"
-                            disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= history.length}
+                            disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= llmHistory.length}
                             onClick={() => setHistoryPage((p) => p + 1)}
                             className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30"
                           >

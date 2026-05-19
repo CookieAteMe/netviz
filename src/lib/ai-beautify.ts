@@ -31,42 +31,45 @@ export type BeautifyDiffEntry = {
 };
 
 const AI_CONFIG_KEY = "netviz-ai-config";
-const HISTORY_KEY = "netviz-beautify-history";
-const MAX_HISTORY = 50;
+const LLM_HISTORY_KEY = "netviz-llm-history";
+const MAX_LLM_HISTORY = 50;
 
 // ---------------------------------------------------------------------------
-// History types & persistence
+// LLM call history (tracks which endpoints/models were used)
 // ---------------------------------------------------------------------------
 
-export type BeautifyHistoryEntry = {
+export type LlmCallRecord = {
   id: string;
   timestamp: number;
-  summary?: string;
-  nodeCount: number;
-  edgeCount: number;
-  changeCount: number;
-  diffs: BeautifyDiffEntry[];
+  endpoint: string;
+  model: string;
+  apiKeyPrefix: string;
 };
 
-export function loadBeautifyHistory(): BeautifyHistoryEntry[] {
+export function maskApiKey(key: string): string {
+  if (key.length <= 8) return key.slice(0, 4) + "****";
+  return key.slice(0, 4) + "****" + key.slice(-4);
+}
+
+export function loadLlmHistory(): LlmCallRecord[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(LLM_HISTORY_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as BeautifyHistoryEntry[];
+    return JSON.parse(raw) as LlmCallRecord[];
   } catch {
     return [];
   }
 }
 
-export function addBeautifyHistory(entry: BeautifyHistoryEntry): void {
-  const history = loadBeautifyHistory();
-  history.unshift(entry);
-  if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+export function addLlmHistory(record: LlmCallRecord): void {
+  const history = loadLlmHistory();
+  history.unshift(record);
+  if (history.length > MAX_LLM_HISTORY) history.length = MAX_LLM_HISTORY;
+  localStorage.setItem(LLM_HISTORY_KEY, JSON.stringify(history));
 }
 
-export function clearBeautifyHistory(): void {
-  localStorage.removeItem(HISTORY_KEY);
+export function clearLlmHistory(): void {
+  localStorage.removeItem(LLM_HISTORY_KEY);
 }
 
 // ---------------------------------------------------------------------------
