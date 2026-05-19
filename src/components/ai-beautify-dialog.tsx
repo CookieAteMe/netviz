@@ -144,6 +144,7 @@ export function AiBeautifyDialog({
   const [llmHistory, setLlmHistory] = useState<LlmCallRecord[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(0);
+  const [showConfig, setShowConfig] = useState(false);
   const HISTORY_PAGE_SIZE = 5;
 
   // When dialog opens, snapshot current state but don't call API
@@ -152,6 +153,7 @@ export function AiBeautifyDialog({
       setCurrentNodes(nodes);
       setCurrentEdges(edges);
       setBeautifyResult(null);
+      setShowConfig(false);
 
       const config = loadAiConfig();
       const saved = loadLlmHistory();
@@ -199,6 +201,15 @@ export function AiBeautifyDialog({
     }
   };
 
+  const handleUseHistoryConfig = (record: LlmCallRecord) => {
+    saveAiConfig({
+      endpoint: record.endpoint,
+      apiKey: "", // masked key is read-only, user must re-enter
+      model: record.model,
+    });
+    setStatus({ type: "config" });
+  };
+
   const handleRetry = () => {
     const config = loadAiConfig();
     if (config) {
@@ -238,22 +249,60 @@ export function AiBeautifyDialog({
           {status.type === "loading" && (
             <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="text-sm">Calling AI API...</span>
+              <span className="text-sm">Sending request to LLM...</span>
+              <span className="text-xs opacity-60">
+                {loadAiConfig()?.model ?? "unknown model"}
+                {" · "}
+                {currentNodes.length} nodes, {currentEdges.length} edges
+              </span>
             </div>
           )}
 
           {status.type === "ready" && (
-            <div className="flex flex-col items-center gap-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                {currentNodes.length} nodes, {currentEdges.length} edges will be optimized
-              </p>
-              <Button onClick={handleStart} size="default" className="gap-2">
-                <Sparkles className="h-5 w-5" />
-                Start Beautify
-              </Button>
+            <div className="flex flex-col gap-4 py-3">
+              {/* Config bar */}
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <div className="min-w-0 flex-1 text-xs">
+                  {(() => {
+                    const c = loadAiConfig();
+                    return c ? (
+                      <>
+                        <span className="font-medium text-foreground">{c.model}</span>
+                        <span className="ml-2 text-muted-foreground">{c.endpoint}</span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">No API config set</span>
+                    );
+                  })()}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowConfig((v) => !v)}
+                  className="shrink-0 text-xs"
+                >
+                  {showConfig ? "Done" : "Config"}
+                </Button>
+              </div>
+
+              {showConfig && (
+                <div className="rounded-md border border-border p-3">
+                  <AiConfigInline onDone={() => setShowConfig(false)} />
+                </div>
+              )}
+
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {currentNodes.length} nodes, {currentEdges.length} edges
+                </p>
+                <Button onClick={handleStart} size="default" className="gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Start Beautify
+                </Button>
+              </div>
 
               {llmHistory.length > 0 && (
-                <div className="w-full pt-2">
+                <div className="w-full pt-1">
                   <button
                     type="button"
                     onClick={() => setHistoryOpen((v) => !v)}
@@ -271,19 +320,21 @@ export function AiBeautifyDialog({
                       {llmHistory
                         .slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE)
                         .map((r) => (
-                          <div
+                          <button
                             key={r.id}
-                            className="rounded-md border border-border px-3 py-2 text-xs"
+                            type="button"
+                            onClick={() => handleUseHistoryConfig(r)}
+                            className="w-full rounded-md border border-border px-3 py-2 text-left text-xs transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:hover:border-indigo-700 dark:hover:bg-indigo-950"
                           >
                             <div className="flex items-center justify-between text-muted-foreground">
                               <span>{new Date(r.timestamp).toLocaleString()}</span>
-                              <span className="font-mono">{r.model}</span>
+                              <span className="font-mono font-medium text-foreground">{r.model}</span>
                             </div>
-                            <p className="mt-0.5 truncate text-muted-foreground" title={r.endpoint}>
+                            <p className="mt-0.5 truncate" title={r.endpoint}>
                               {r.endpoint}
                             </p>
                             <p className="font-mono text-muted-foreground">{r.apiKeyPrefix}</p>
-                          </div>
+                          </button>
                         ))}
                       {llmHistory.length > HISTORY_PAGE_SIZE && (
                         <div className="flex items-center justify-center gap-2 pt-1">
